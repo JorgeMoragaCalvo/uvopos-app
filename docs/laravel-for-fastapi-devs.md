@@ -289,23 +289,21 @@ Config in Laravel is layered exactly like Spring's `application.yml` + environme
 
 ```php
 return [
-    'pending_days' => env('PAYMENT_ALERT_PENDING_DAYS', 7),
-    'overdue_days' => env('PAYMENT_ALERT_OVERDUE_DAYS', 30),
+    'due_soon_days' => env('PAYMENT_ALERT_DUE_SOON_DAYS', 3),
 ];
 ```
 
 - Each file in `config/` returns a plain PHP array. `env('KEY', default)` reads the `.env` file (same convention as FastAPI projects).
-- Anywhere in the app, `config('payment_alert.pending_days', 7)` reads it — the key is `<filename>.<array key>` (≈ `@Value("${payment-alert.pending-days}")`).
+- Anywhere in the app, `config('payment_alert.due_soon_days', 3)` reads it — the key is `<filename>.<array key>` (≈ `@Value("${payment-alert.due-soon-days}")`).
 - Rule of thumb: **`env()` only inside `config/` files**; application code calls `config()`. (Laravel can cache all config into one file for speed, after which `env()` returns nothing elsewhere.)
 
 `app/Enums/PaymentStatus.php` shows a testability trick worth noticing:
 
 ```php
-public static function fromDaysPastDue(int $days, ?int $pendingDays = null, ?int $overdueDays = null): string
+public static function fromDaysPastDue(int $days, ?int $dueSoonDays = null): string
 {
-    $pendingDays = $pendingDays ?? (int) config('payment_alert.pending_days', 7);
-    $overdueDays = $overdueDays ?? (int) config('payment_alert.overdue_days', 30);
-    // on_time (≤ 0) → pending (≤ 7) → overdue (≤ 30) → suspended
+    $dueSoonDays = $dueSoonDays ?? (int) config('payment_alert.due_soon_days', 3);
+    // on_time (≤ -(due_soon_days + 1)) → due_soon (-due_soon_days .. 0) → overdue (> 0, no cutoff)
 }
 ```
 
@@ -349,7 +347,7 @@ What actually happens when a user visits the page, types `12.345.678-5`, and cli
    - Not a short numeric ID, so `Rut::isValid()` normalizes to `123456785` and verifies the modulo-11 check digit. Invalid → `addError()` and return without any DB query.
    - Valid → `Customer::byRutOrId($term)->first()` runs one SQL query against `empresas`, comparing normalized RUTs.
 5. **Re-render.** `render()` draws the template with the new state. Blade reads the accessor chain: `$customer->payment_status` → `days_past_due` (Carbon date math on `proximoPago`) → `PaymentStatus::fromDaysPastDue()` (thresholds from config) → `alertClass()`/`label()` pick the Bootstrap color and Spanish text.
-6. **Response** carries the fresh HTML + updated state snapshot. Livewire's JS diffs the HTML into the DOM — the green/yellow/orange/red alert appears without a page reload.
+6. **Response** carries the fresh HTML + updated state snapshot. Livewire's JS diffs the HTML into the DOM — the green/orange/red alert appears without a page reload.
 
 Every later interaction repeats steps 3–6.
 
