@@ -11,9 +11,11 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
- * Read-only view over the production `empresas` table. The subscription
- * due date lives in `proximoPago`; RUTs are stored as "77353398-9"
- * (dash, no dots), so lookups compare against a stripped-down copy.
+ * View over the production `empresas` table. The subscription due date
+ * lives in `proximoPago`; RUTs are stored as "77353398-9" (dash, no
+ * dots), so lookups compare against a stripped-down copy. Mostly
+ * read-only, except for the Webpay/suspend flow, which writes
+ * `proximoPago` and `estado`.
  */
 class Customer extends Model
 {
@@ -63,6 +65,60 @@ class Customer extends Model
     public function getFormattedRutAttribute(): string
     {
         return Rut::format($this->rut);
+    }
+
+    public function getIsActiveAttribute(): bool
+    {
+        return $this->estado === '1';
+    }
+
+    /**
+     * The company's current plan/pricing row, used to charge via
+     * Webpay and to extend the due date on a successful payment.
+     */
+    public function activePlan(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(DatosPlan::class, 'empresa_id')->where('estado', 1)->latestOfMany();
+    }
+
+    /**
+     * Amount to charge via Webpay: the plan price plus any hardware
+     * installment still owed. Null if there is no active plan on file.
+     */
+    public function getChargeAmountAttribute(): ?int
+    {
+        if ($this->activePlan === null) {
+            return null;
+        }
+
+        return (int) $this->activePlan->monto_plan + (int) ($this->activePlan->monto_hardware ?: 0);
+    }
+
+    /**
+     * True once staff are allowed to suspend the account: overdue by
+     * more than the configured grace period, and not already suspended.
+     * Suspension itself is always a manual, staff-confirmed action.
+     */
+    public function getIsSuspendableAttribute(): bool
+    {
+        $graceDays = (int) config('payment_alert.overdue_grace_days', 3);
+
+        return $this->is_active && ($this->days_past_due ?? 0) > $graceDays;
+    }
+
+    /**
+     * Days left before the account becomes suspendable. Only
+     * meaningful while overdue and not yet suspendable.
+     */
+    public function getDaysUntilSuspendableAttribute(): ?int
+    {
+        if ($this->days_past_due === null || $this->days_past_due <= 0) {
+            return null;
+        }
+
+        $graceDays = (int) config('payment_alert.overdue_grace_days', 3);
+
+        return max(0, $graceDays - $this->days_past_due + 1);
     }
 
     /**

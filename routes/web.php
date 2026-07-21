@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\WebpayReturnController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -17,4 +18,7 @@ Route::get('/', function () {
     return view('welcome');
 });
 
-Route::view('/payment-alert', 'payment-alert-page');
+Route::view('/payment-alert', 'payment-alert-page')->name('payment-alert');
+
+Route::match(['get', 'post'], '/payment-alert/webpay/return', [WebpayReturnController::class, 'handle'])
+    ->name('webpay.return');
