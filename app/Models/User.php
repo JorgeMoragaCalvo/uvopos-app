@@ -21,6 +21,8 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'empresa_id',
+        'status',
     ];
 
     /**
@@ -40,5 +42,15 @@ class User extends Authenticatable
      */
     protected $casts = [
         'email_verified_at' => 'datetime',
+        'status' => 'integer',
     ];
+
+    /**
+     * The company this user belongs to. Drives the customer-facing
+     * payment status page at /mi-cuenta.
+     */
+    public function customer(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(Customer::class, 'empresa_id');
+    }
 }

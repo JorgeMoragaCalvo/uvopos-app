@@ -63,6 +63,32 @@ return [
             ]) : [],
         ],
 
+        /*
+         * Read-only replica of the production `db2026` database. Opt-in and
+         * never the default connection: the `consultor` account cannot write,
+         * so any payment/suspend write against it will fail. Use it only to
+         * inspect real data shapes, e.g. from tinker:
+         *
+         *     Customer::on('mysql_replica')->byRutOrId('77353398-9')->first();
+         */
+        'mysql_replica' => [
+            'driver' => 'mysql',
+            'host' => env('DB_HOST_REPLICA', '127.0.0.1'),
+            'port' => env('DB_PORT_REPLICA', '3306'),
+            'database' => env('DB_DATABASE_REPLICA', 'forge'),
+            'username' => env('DB_USERNAME_REPLICA', 'forge'),
+            'password' => env('DB_PASSWORD_REPLICA', ''),
+            'charset' => 'utf8mb4',
+            'collation' => 'utf8mb4_unicode_ci',
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'strict' => true,
+            'engine' => null,
+            'options' => extension_loaded('pdo_mysql') ? array_filter([
+                PDO::MYSQL_ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
+            ]) : [],
+        ],
+
         'pgsql' => [
             'driver' => 'pgsql',
             'url' => env('DATABASE_URL'),

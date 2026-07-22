@@ -26,9 +26,10 @@ class WebpayReturnController extends Controller
 
         $token = $request->input('token_ws');
         $search = $pending['search'] ?? '';
+        $returnTo = $pending['return_to'] ?? 'payment-alert';
 
         if (!$token || !$pending) {
-            return $this->back($search, 'failed');
+            return $this->back($search, 'failed', $returnTo);
         }
 
         try {
@@ -36,18 +37,18 @@ class WebpayReturnController extends Controller
         } catch (\Throwable $e) {
             Log::error('Webpay commit failed', ['exception' => $e->getMessage(), 'token' => $token]);
 
-            return $this->back($search, 'failed');
+            return $this->back($search, 'failed', $returnTo);
         }
 
         Log::info('Webpay commit response', (array) $response);
 
         if (!$response->isApproved()) {
-            return $this->back($search, 'failed');
+            return $this->back($search, 'failed', $returnTo);
         }
 
         $this->applySuccessfulPayment($pending['empresa_id'], $response);
 
-        return $this->back($search, 'success');
+        return $this->back($search, 'success', $returnTo);
     }
 
     private function applySuccessfulPayment(int $empresaId, $response): void
@@ -85,8 +86,17 @@ class WebpayReturnController extends Controller
         User::where('empresa_id', $empresaId)->update(['status' => 1]);
     }
 
-    private function back(string $search, string $result): RedirectResponse
+    /**
+     * Back to whichever page started the payment: the customer portal
+     * (/mi-cuenta) or the staff lookup page, which needs its search term
+     * restored to re-render the customer it was looking at.
+     */
+    private function back(string $search, string $result, string $returnTo = 'payment-alert'): RedirectResponse
     {
+        if ($returnTo === 'mi-cuenta') {
+            return redirect()->route('mi-cuenta', ['payment' => $result]);
+        }
+
         return redirect()->route('payment-alert', ['search' => $search, 'payment' => $result]);
     }
 }
