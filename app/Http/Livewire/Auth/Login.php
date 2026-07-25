@@ -46,7 +46,9 @@ class Login extends Component
 
         session()->regenerate();
 
-        return redirect()->intended(RouteServiceProvider::HOME);
+        return redirect()->intended(
+            Auth::user()->isAdmin() ? route('payment-alert') : RouteServiceProvider::HOME
+        );
     }
 
     public function render()

@@ -8,12 +8,20 @@ use App\Models\User;
 use App\Support\Rut;
 use App\Support\Webpay;
 use Livewire\Component;
+use Livewire\WithPagination;
 use Transbank\Webpay\WebpayPlus\Transaction;
 
 class PaymentAlert extends Component
 {
+    use WithPagination;
+
+    protected $paginationTheme = 'bootstrap';
+
     /** @var string Customer ID or RUT typed by the user. */
     public $search = '';
+
+    /** @var string One of the PaymentStatus constants, or '' for all. */
+    public $statusFilter = '';
 
     /** @var \App\Models\Customer|null */
     public $customer = null;
@@ -33,6 +41,10 @@ class PaymentAlert extends Component
 
     protected $messages = [
         'search.required' => 'Ingrese un RUT o ID de cliente.',
+    ];
+
+    protected $queryString = [
+        'statusFilter' => ['except' => ''],
     ];
 
     public function mount(): void
@@ -65,6 +77,32 @@ class PaymentAlert extends Component
 
         $this->customer = Customer::byRutOrId($term)->first();
         $this->notFound = $this->customer === null;
+    }
+
+    /**
+     * Opens a row from the list in the detail panel. Goes through
+     * lookup() rather than assigning $customer directly so that $search
+     * stays populated — payWithWebpay() puts it in the webpay_pending
+     * payload, and WebpayReturnController redirects back to ?search=.
+     */
+    public function selectCustomer(int $id): void
+    {
+        $this->search = (string) $id;
+        $this->paymentResult = null;
+        $this->confirmingSuspend = false;
+        $this->resetErrorBag();
+        $this->lookup();
+    }
+
+    public function filterByStatus(string $status): void
+    {
+        $this->statusFilter = $status;
+        $this->resetPage();
+    }
+
+    public function updatingStatusFilter(): void
+    {
+        $this->resetPage();
     }
 
     public function updatedSearch(): void
@@ -157,6 +195,18 @@ class PaymentAlert extends Component
 
     public function render()
     {
-        return view('livewire.payment-alert');
+        return view('livewire.payment-alert', [
+            'customers' => Customer::query()
+                ->when($this->statusFilter !== '', function ($query) {
+                    return $query->withPaymentStatus($this->statusFilter);
+                })
+                ->orderByUrgency()
+                ->paginate(15),
+            'counts' => [
+                PaymentStatus::ON_TIME  => Customer::withPaymentStatus(PaymentStatus::ON_TIME)->count(),
+                PaymentStatus::DUE_SOON => Customer::withPaymentStatus(PaymentStatus::DUE_SOON)->count(),
+                PaymentStatus::OVERDUE  => Customer::withPaymentStatus(PaymentStatus::OVERDUE)->count(),
+            ],
+        ]);
     }
 }

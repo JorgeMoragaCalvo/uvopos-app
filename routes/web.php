@@ -19,7 +19,11 @@ Route::get('/', function () {
     return view('welcome');
 });
 
-Route::view('/payment-alert', 'payment-alert-page')->name('payment-alert');
+// Staff page: the all-customers list plus pay/suspend/reactivate.
+// Admins only (users.role = 'admin'); everyone else lands on /mi-cuenta.
+Route::view('/payment-alert', 'payment-alert-page')
+    ->middleware(['auth', 'admin'])
+    ->name('payment-alert');
 
 Route::match(['get', 'post'], '/payment-alert/webpay/return', [WebpayReturnController::class, 'handle'])
     ->name('webpay.return');

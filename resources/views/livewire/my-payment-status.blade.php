@@ -44,6 +44,7 @@
                     <p class="mb-1">
                         <strong>{{ $customer->name }}</strong>
                         &mdash; RUT {{ $customer->formatted_rut }}
+                        <span class="badge badge-light">Plan: {{ $customer->plan_type }}</span>
                     </p>
                     <p class="mb-0">
                         @if ($customer->payment_date === null)

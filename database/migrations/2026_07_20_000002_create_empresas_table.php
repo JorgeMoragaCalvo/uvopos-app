@@ -19,6 +19,7 @@ return new class extends Migration
             $table->string('RazonSocial')->nullable();
             $table->string('nombre_fantasia', 250)->nullable();
             $table->date('proximoPago')->nullable();
+            $table->string('tipoPlan', 45)->nullable();
             $table->string('estado', 45)->default('1');
             $table->timestamps();
             $table->softDeletes();

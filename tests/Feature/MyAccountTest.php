@@ -20,13 +20,14 @@ class MyAccountTest extends TestCase
      * Creates a company (with an active plan) plus the user that belongs
      * to it, due `$daysPastDue` days ago.
      */
-    private function userForCompany(string $name, int $daysPastDue, string $estado = '1'): User
+    private function userForCompany(string $name, int $daysPastDue, string $estado = '1', ?string $tipoPlan = 'Mensual'): User
     {
         $empresaId = DB::table('empresas')->insertGetId([
             'rut' => '20000001-8',
             'RazonSocial' => $name,
             'nombre_fantasia' => $name,
             'proximoPago' => Carbon::today()->subDays($daysPastDue),
+            'tipoPlan' => $tipoPlan,
             'estado' => $estado,
             'created_at' => now(),
             'updated_at' => now(),
@@ -113,6 +114,20 @@ class MyAccountTest extends TestCase
 
         $response->assertSee('Empresa Propia SpA');
         $response->assertDontSee('Empresa Ajena SpA');
+    }
+
+    public function test_customer_sees_their_plan_type(): void
+    {
+        $user = $this->userForCompany('Empresa Anual SpA', -10, '1', 'Anual');
+
+        $this->actingAs($user)->get('/mi-cuenta')->assertSee('Plan: Anual');
+    }
+
+    public function test_customer_without_a_plan_type_sees_a_fallback(): void
+    {
+        $user = $this->userForCompany('Empresa Sin Plan SpA', -10, '1', null);
+
+        $this->actingAs($user)->get('/mi-cuenta')->assertSee('Plan: Sin plan');
     }
 
     public function test_user_without_a_company_gets_a_neutral_message(): void

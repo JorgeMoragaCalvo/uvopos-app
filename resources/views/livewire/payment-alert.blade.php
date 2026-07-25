@@ -17,6 +17,24 @@
             <strong>Estado de pago del cliente</strong>
         </div>
         <div class="card-body">
+            <div class="mb-3 d-flex flex-wrap align-items-center" style="gap: .5rem;">
+                <button type="button"
+                        class="btn btn-sm {{ $statusFilter === '' ? 'btn-secondary' : 'btn-outline-secondary' }}"
+                        wire:click="filterByStatus('')">
+                    Todos
+                </button>
+                @foreach ([\App\Enums\PaymentStatus::ON_TIME, \App\Enums\PaymentStatus::DUE_SOON, \App\Enums\PaymentStatus::OVERDUE] as $filterStatus)
+                    <button type="button"
+                            class="btn btn-sm {{ $statusFilter === $filterStatus ? 'btn-dark' : 'btn-outline-dark' }}"
+                            wire:click="filterByStatus('{{ $filterStatus }}')">
+                        {{ \App\Enums\PaymentStatus::label($filterStatus) }}
+                        <span class="badge {{ \App\Enums\PaymentStatus::badgeClass($filterStatus) }}">
+                            {{ $counts[$filterStatus] }}
+                        </span>
+                    </button>
+                @endforeach
+            </div>
+
             <form wire:submit.prevent="lookup">
                 <div class="form-group">
                     <label for="payment-alert-search">RUT o ID de cliente</label>
@@ -73,6 +91,7 @@
                     <p class="mb-1">
                         <strong>{{ $customer->name }}</strong>
                         &mdash; RUT {{ $customer->formatted_rut }} (ID {{ $customer->id }})
+                        <span class="badge badge-light">Plan: {{ $customer->plan_type }}</span>
                     </p>
                     <p class="mb-0">
                         @if ($customer->payment_date === null)
@@ -134,6 +153,60 @@
                         </button>
                     @endif
                 </div>
+            @endif
+
+            <hr class="my-4">
+
+            <h6 class="mb-3">
+                Todos los clientes
+                @if ($statusFilter !== '')
+                    <small class="text-muted">— {{ \App\Enums\PaymentStatus::label($statusFilter) }}</small>
+                @endif
+            </h6>
+
+            @if ($customers->isEmpty())
+                <div class="alert alert-secondary mb-0" role="alert">
+                    No hay clientes en este estado.
+                </div>
+            @else
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover">
+                        <thead>
+                            <tr>
+                                <th>Cliente</th>
+                                <th>RUT</th>
+                                <th>Plan</th>
+                                <th>Vence</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach ($customers as $row)
+                                <tr wire:click="selectCustomer({{ $row->id }})"
+                                    wire:key="customer-{{ $row->id }}"
+                                    style="cursor: pointer;"
+                                    class="{{ $customer && $customer->id === $row->id ? 'table-active' : '' }}">
+                                    <td>{{ $row->name }}</td>
+                                    <td>{{ $row->formatted_rut }}</td>
+                                    <td>{{ $row->plan_type }}</td>
+                                    <td>
+                                        {{ $row->payment_date ? $row->payment_date->format('d-m-Y') : '—' }}
+                                    </td>
+                                    <td>
+                                        <span class="badge {{ \App\Enums\PaymentStatus::badgeClass($row->payment_status) }}">
+                                            {{ \App\Enums\PaymentStatus::label($row->payment_status) }}
+                                        </span>
+                                        @if (!$row->is_active)
+                                            <span class="badge badge-dark">Suspendido</span>
+                                        @endif
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+
+                {{ $customers->links() }}
             @endif
         </div>
     </div>

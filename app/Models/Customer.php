@@ -59,7 +59,11 @@ class Customer extends Model
     {
         $days = $this->days_past_due;
 
-        return PaymentStatus::fromDaysPastDue($days ?? 0);
+        if ($days === null) {
+            return PaymentStatus::ON_TIME;
+        }
+
+        return PaymentStatus::fromDaysPastDue($days);
     }
 
     public function getFormattedRutAttribute(): string
@@ -70,6 +74,28 @@ class Customer extends Model
     public function getIsActiveAttribute(): bool
     {
         return $this->estado === '1';
+    }
+
+    /**
+     * Human-readable subscription plan. `empresas.tipoPlan` is free text
+     * in production (13 distinct values, one known misspelling, some
+     * blanks), so unrecognized values are shown as stored rather than
+     * collapsed into a fixed set.
+     */
+    public function getPlanTypeAttribute(): string
+    {
+        $plan = trim((string) $this->tipoPlan);
+
+        if ($plan === '') {
+            return 'Sin plan';
+        }
+
+        // Known data-entry typo in db2026.empresas.
+        if (mb_strtolower($plan) === 'menusal') {
+            return 'Mensual';
+        }
+
+        return $plan;
     }
 
     /**
@@ -119,6 +145,54 @@ class Customer extends Model
         $graceDays = (int) config('payment_alert.overdue_grace_days', 3);
 
         return max(0, $graceDays - $this->days_past_due + 1);
+    }
+
+    /**
+     * SQL mirror of {@see PaymentStatus::fromDaysPastDue()}, for the
+     * admin list, which has to filter and count by status without
+     * loading every row. `payment_status` is a PHP accessor, so the
+     * status is expressed here as a range on `proximoPago`
+     * (days_past_due = today - proximoPago):
+     *
+     *   overdue  : days > 0        -> proximoPago < today
+     *   due_soon : -D <= days <= 0 -> today <= proximoPago <= today + D
+     *   on_time  : days <= -(D+1)  -> proximoPago > today + D, or NULL
+     *
+     * Keep this in sync with the accessor — changing one without the
+     * other makes the badge and the filter disagree.
+     */
+    public function scopeWithPaymentStatus(Builder $query, string $status): Builder
+    {
+        $dueSoonDays = (int) config('payment_alert.due_soon_days', 3);
+        $today = Carbon::today();
+        $dueSoonEnd = $today->copy()->addDays($dueSoonDays);
+
+        if ($status === PaymentStatus::OVERDUE) {
+            return $query->whereDate('proximoPago', '<', $today);
+        }
+
+        if ($status === PaymentStatus::DUE_SOON) {
+            return $query->whereDate('proximoPago', '>=', $today)
+                ->whereDate('proximoPago', '<=', $dueSoonEnd);
+        }
+
+        if ($status === PaymentStatus::ON_TIME) {
+            return $query->where(function (Builder $q) use ($dueSoonEnd) {
+                $q->whereDate('proximoPago', '>', $dueSoonEnd)
+                    ->orWhereNull('proximoPago');
+            });
+        }
+
+        return $query;
+    }
+
+    /**
+     * Most urgent first: the furthest overdue at the top, companies
+     * without a payment date last.
+     */
+    public function scopeOrderByUrgency(Builder $query): Builder
+    {
+        return $query->orderByRaw('proximoPago IS NULL')->orderBy('proximoPago');
     }
 
     /**

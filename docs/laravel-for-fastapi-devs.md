@@ -61,10 +61,14 @@ Route::get('/', function () {
     return view('welcome');
 });
 
-Route::view('/payment-alert', 'payment-alert-page');
+Route::view('/payment-alert', 'payment-alert-page')
+    ->middleware(['auth', 'admin'])
+    ->name('payment-alert');
 ```
 
 `Route::get` takes a URL and a handler — here a closure, but usually a controller method (like `@GetMapping` pointing at a handler). `Route::view` is a shortcut for "this URL just renders this template, no logic." The string `'payment-alert-page'` resolves by convention to `resources/views/payment-alert-page.blade.php`.
+
+`->middleware([...])` is the closest thing to FastAPI's `Depends(...)` on a route: each name is a class that gets the request, may short-circuit it, or passes it on to the next one. The names are looked up in `$routeMiddleware` in `app/Http/Kernel.php` — `'auth'` bounces guests to `/login`, and `'admin'` (`app/Http/Middleware/EnsureUserIsAdmin.php`) sends logged-in non-staff to `/mi-cuenta`. The difference from `Depends` is that middleware wraps the *whole* request/response cycle rather than injecting a value into the handler; for injecting values, Laravel uses type-hinted constructor/method parameters resolved by the container.
 
 ---
 
