@@ -21,6 +21,9 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'empresa_id',
+        'status',
+        'role',
     ];
 
     /**
@@ -40,5 +43,24 @@ class User extends Authenticatable
      */
     protected $casts = [
         'email_verified_at' => 'datetime',
+        'status' => 'integer',
     ];
+
+    /**
+     * Staff with access to /payment-alert: the all-customers list and
+     * the suspend/reactivate actions. Company users have role = null.
+     */
+    public function isAdmin(): bool
+    {
+        return $this->role === 'admin';
+    }
+
+    /**
+     * The company this user belongs to. Drives the customer-facing
+     * payment status page at /mi-cuenta.
+     */
+    public function customer(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(Customer::class, 'empresa_id');
+    }
 }
