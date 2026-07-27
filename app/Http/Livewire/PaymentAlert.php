@@ -7,6 +7,7 @@ use App\Models\Customer;
 use App\Models\User;
 use App\Support\Rut;
 use App\Support\Webpay;
+use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Transbank\Webpay\WebpayPlus\Transaction;
@@ -132,6 +133,10 @@ class PaymentAlert extends Component
         session(['webpay_pending' => [
             'empresa_id' => $this->customer->id,
             'search' => $this->search,
+            // suscriptor_payments.user_id is NOT NULL in production and
+            // means "who took the payment", so it has to travel with the
+            // pending payload — the Transbank return lands unauthenticated.
+            'user_id' => Auth::id(),
         ]]);
 
         $buyOrder = 'PA' . $this->customer->id . '-' . now()->timestamp;

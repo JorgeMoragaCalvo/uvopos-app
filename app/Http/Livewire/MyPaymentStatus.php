@@ -56,6 +56,7 @@ class MyPaymentStatus extends Component
             'empresa_id' => $this->customer->id,
             'search' => '',
             'return_to' => 'mi-cuenta',
+            'user_id' => Auth::id(),
         ]]);
 
         $buyOrder = 'PA' . $this->customer->id . '-' . now()->timestamp;

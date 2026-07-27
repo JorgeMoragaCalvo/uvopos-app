@@ -42,6 +42,18 @@ return [
             'visibility' => 'public',
         ],
 
+        /*
+         * Uploaded bank statements. Deliberately not the `public` disk and
+         * with no `url`: a cartola lists every movement of the company's
+         * own bank account, so it is kept out of the web root and is only
+         * ever reachable through the admin-gated reconciliation screen.
+         */
+        'cartolas' => [
+            'driver' => 'local',
+            'root' => storage_path('app/cartolas'),
+            'visibility' => 'private',
+        ],
+
         's3' => [
             'driver' => 's3',
             'key' => env('AWS_ACCESS_KEY_ID'),
