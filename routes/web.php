@@ -28,6 +28,12 @@ Route::view('/payment-alert', 'payment-alert-page')
 Route::match(['get', 'post'], '/payment-alert/webpay/return', [WebpayReturnController::class, 'handle'])
     ->name('webpay.return');
 
+// Staff page: import a bank statement and reconcile its deposits against
+// customers and against the Transbank settlements. Admins only.
+Route::view('/conciliacion-bancaria', 'bank-reconciliation-page')
+    ->middleware(['auth', 'admin'])
+    ->name('bank-reconciliation');
+
 // Customer-facing portal: the logged-in user sees their own company's
 // payment status and can pay it. Staff actions stay on /payment-alert.
 Route::view('/login', 'auth-page')->middleware('guest')->name('login');

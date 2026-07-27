@@ -3,12 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\Customer;
-use App\Models\SuscriptorPayment;
-use App\Models\User;
+use App\Services\RecordPayment;
 use App\Support\Webpay;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Transbank\Webpay\WebpayPlus\Transaction;
 
@@ -46,44 +46,47 @@ class WebpayReturnController extends Controller
             return $this->back($search, 'failed', $returnTo);
         }
 
-        $this->applySuccessfulPayment($pending['empresa_id'], $response);
+        $this->applySuccessfulPayment($pending, $response);
 
         return $this->back($search, 'success', $returnTo);
     }
 
-    private function applySuccessfulPayment(int $empresaId, $response): void
+    /**
+     * Recording the payment itself lives in {@see RecordPayment}, shared
+     * with the bank-reconciliation flow so both channels extend the due
+     * date by exactly the same rule.
+     */
+    private function applySuccessfulPayment(array $pending, $response): void
     {
-        $customer = Customer::find($empresaId);
+        $customer = Customer::find($pending['empresa_id']);
 
         if ($customer === null) {
             return;
         }
 
-        $plan = $customer->activePlan;
-        $periodDays = $plan->periodo_days ?? 30;
-        $oldDueDate = $customer->proximoPago;
-        $newDueDate = Carbon::today()->max($oldDueDate ?? Carbon::today())->addDays($periodDays);
+        // payWithWebpay() puts the payer in the session payload, and both
+        // pages that start a payment are behind `auth`. If it is somehow
+        // missing, the customer has still been charged — record the
+        // payment against the session user and leave a trail, rather than
+        // lose it.
+        $userId = (int) ($pending['user_id'] ?? Auth::id() ?? 0);
 
-        SuscriptorPayment::create([
-            'amount' => $response->getAmount(),
-            'empresa_id' => $empresaId,
-            'plan_id' => $plan->plan_id ?? null,
-            'periodo_plan' => $plan->periodo_plan ?? null,
-            'notes' => 'Pago online via Webpay Plus (orden ' . $response->getBuyOrder() . ')',
-            'fecha_pago' => now(),
-            'fecha_vencimiento_original' => $oldDueDate,
-        ]);
-
-        $customer->proximoPago = $newDueDate;
-        $customer->estado = '1';
-        $customer->save();
-
-        if ($plan !== null) {
-            $plan->fecha_vencimiento = $newDueDate;
-            $plan->save();
+        if ($userId === 0) {
+            Log::warning('Webpay payment recorded without a user', [
+                'buy_order' => $response->getBuyOrder(),
+                'empresa_id' => $customer->id,
+            ]);
         }
 
-        User::where('empresa_id', $empresaId)->update(['status' => 1]);
+        app(RecordPayment::class)->apply(
+            $customer,
+            (int) $response->getAmount(),
+            Carbon::now(),
+            RecordPayment::SOURCE_WEBPAY,
+            $response->getBuyOrder(),
+            $userId,
+            'Pago online via Webpay Plus (orden ' . $response->getBuyOrder() . ')'
+        );
     }
 
     /**

@@ -6,6 +6,7 @@ use App\Support\Rut;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Local-only test companies covering every Payment Alert / Webpay / suspend
@@ -77,5 +78,69 @@ class PaymentAlertDemoSeeder extends Seeder
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+
+        $this->seedReconciliationDemo();
+    }
+
+    /**
+     * A cartola to feed /conciliacion-bancaria with.
+     *
+     * It has to be generated rather than committed as a fixture, because
+     * the demo companies' due dates are relative to today and the date
+     * signal is part of what the match engine scores.
+     */
+    private function seedReconciliationDemo(): void
+    {
+        $suspendable = DB::table('empresas')->where('RazonSocial', 'Demo Overdue Suspendable SpA')->first();
+        $overdue = DB::table('empresas')->where('RazonSocial', 'Demo Overdue Day 1 SpA')->first();
+
+        if ($suspendable === null || $overdue === null) {
+            return;
+        }
+
+        // A Webpay payment for the Transbank settlement tab to compare
+        // against: paid two days before the deposit lands.
+        DB::table('suscriptor_payments')->insert([
+            'amount' => 120000,
+            'user_id' => null,
+            'empresa_id' => $overdue->id,
+            'external_reference' => 'PA' . $overdue->id . '-' . Carbon::today()->subDays(4)->timestamp,
+            'notes' => 'Pago online via Webpay Plus (demo)',
+            'fecha_pago' => Carbon::today()->subDays(4)->setTime(11, 30),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $date = function (int $daysAgo) {
+            return Carbon::today()->subDays($daysAgo)->format('d/m/Y');
+        };
+
+        $rows = [
+            'Cartola Histórica;;;;',
+            'Cuenta Corriente;000-98765-43;;;',
+            ';;;;',
+            'Fecha;Descripción;N° Documento;Cargos;Abonos',
+            // Unambiguous: RUT in the glosa, exact plan amount, near the due date.
+            $date(3) . ';TRANSFERENCIA DE ' . $suspendable->rut . ' DEMO OVERDUE SUSPENDABLE;100234;;40.000',
+            // The Transbank payout for the settlement tab.
+            $date(2) . ';ABONO TRANSBANK LIQUIDACION DIARIA;100235;;120.000',
+            // No RUT: matches on name, amount and date, so it is suggested
+            // but must still be confirmed by hand.
+            $date(2) . ';TRANSF DEMO OVERDUE DAY 1;100236;;40.000',
+            // Money out — never a customer payment.
+            $date(1) . ';PAGO ARRIENDO OFICINA;100237;350.000;',
+            // Matches nobody: this is what manual assignment is for.
+            $date(1) . ';DEPOSITO EN EFECTIVO;;;12.000',
+            'Saldo final;;;;',
+        ];
+
+        Storage::disk('local')->put('demo/cartola-demo.csv', implode("\n", $rows) . "\n");
+
+        if ($this->command !== null) {
+            $this->command->info(
+                'Cartola de demostración: ' . storage_path('app/demo/cartola-demo.csv')
+                . ' (súbala en /conciliacion-bancaria, banco "Banco de Chile")'
+            );
+        }
     }
 }

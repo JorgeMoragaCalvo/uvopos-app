@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Support\Cartola\CartolaReader;
+use App\Support\Reconciliation\MatchEngine;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -13,7 +15,17 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register()
     {
-        //
+        // Both take their tuning as constructor arguments rather than
+        // reading config() internally, so that they stay unit-testable
+        // without the container. That means the container needs to be
+        // told how to build them.
+        $this->app->bind(CartolaReader::class, function () {
+            return CartolaReader::fromConfig();
+        });
+
+        $this->app->bind(MatchEngine::class, function () {
+            return MatchEngine::fromConfig();
+        });
     }
 
     /**

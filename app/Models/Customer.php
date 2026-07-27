@@ -108,6 +108,15 @@ class Customer extends Model
     }
 
     /**
+     * The company's payment history — manual staff entries, Webpay
+     * payments and reconciled bank transfers all land in the same table.
+     */
+    public function payments(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(SuscriptorPayment::class, 'empresa_id');
+    }
+
+    /**
      * Amount to charge via Webpay: the plan price plus any hardware
      * installment still owed. Null if there is no active plan on file.
      */
