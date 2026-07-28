@@ -100,9 +100,11 @@ class PaymentAlertDemoSeeder extends Seeder
 
         // A Webpay payment for the Transbank settlement tab to compare
         // against: paid two days before the deposit lands.
+        $admin = DB::table('users')->where('email', 'admin@example.test')->first();
+
         DB::table('suscriptor_payments')->insert([
             'amount' => 120000,
-            'user_id' => null,
+            'user_id' => $admin->id,
             'empresa_id' => $overdue->id,
             'external_reference' => 'PA' . $overdue->id . '-' . Carbon::today()->subDays(4)->timestamp,
             'notes' => 'Pago online via Webpay Plus (demo)',

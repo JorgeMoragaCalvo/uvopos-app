@@ -21,6 +21,20 @@
                 <div class="alert alert-success" role="alert">
                     Pago realizado con éxito. Su estado se actualizó.
                 </div>
+            @elseif ($paymentResult === 'declined')
+                <div class="alert alert-danger" role="alert">
+                    Su tarjeta fue rechazada por el banco emisor. No se realizó ningún cargo.
+                </div>
+            @elseif ($paymentResult === 'aborted')
+                <div class="alert alert-warning" role="alert">
+                    Canceló el pago o el formulario expiró. No se realizó ningún cargo.
+                </div>
+            @elseif ($paymentResult === 'error')
+                {{-- Distinct from 'declined': the charge may have gone through,
+                     so do not tell the customer to simply try again. --}}
+                <div class="alert alert-danger" role="alert">
+                    No pudimos confirmar su pago. Revise su cartola antes de reintentar o contáctenos.
+                </div>
             @elseif ($paymentResult === 'failed')
                 <div class="alert alert-danger" role="alert">
                     El pago no pudo procesarse. Intente nuevamente.
