@@ -63,6 +63,20 @@
                 <div class="alert alert-success" role="alert">
                     Pago realizado con éxito. El estado del cliente se actualizó.
                 </div>
+            @elseif ($paymentResult === 'declined')
+                <div class="alert alert-danger" role="alert">
+                    El pago fue rechazado por el emisor de la tarjeta. No se realizó ningún cargo.
+                </div>
+            @elseif ($paymentResult === 'aborted')
+                <div class="alert alert-warning" role="alert">
+                    El pago se canceló o el formulario expiró. No se realizó ningún cargo.
+                </div>
+            @elseif ($paymentResult === 'error')
+                {{-- Distinct from 'declined': we could not confirm with Transbank,
+                     so a charge may exist. Staff must check before retrying. --}}
+                <div class="alert alert-danger" role="alert">
+                    No se pudo confirmar el pago con Transbank. Verifique el estado antes de reintentar.
+                </div>
             @elseif ($paymentResult === 'failed')
                 <div class="alert alert-danger" role="alert">
                     El pago no pudo procesarse. Intente nuevamente.

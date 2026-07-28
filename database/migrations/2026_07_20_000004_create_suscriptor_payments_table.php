@@ -18,6 +18,10 @@ use Illuminate\Support\Facades\Schema;
  *  - `external_reference` is new: the Webpay buy order (and, for
  *    reconciled transfers, the bank movement reference). Without it the
  *    only link back to the gateway is prose inside `notes`.
+ *
+ * `user_id` is NOT NULL to match production. The local mirror had it
+ * nullable, which meant the tests could not reproduce the constraint
+ * that would have failed in production — after the customer was charged.
  */
 return new class extends Migration
 {
@@ -26,12 +30,17 @@ return new class extends Migration
         Schema::create('suscriptor_payments', function (Blueprint $table) {
             $table->id();
             $table->decimal('amount', 12, 2);
-            $table->unsignedBigInteger('user_id')->nullable();
+            $table->unsignedBigInteger('user_id');
             $table->unsignedBigInteger('empresa_id');
             $table->integer('plan_id')->nullable();
             $table->string('periodo_plan', 50)->nullable();
             $table->string('notes')->nullable();
-            $table->string('external_reference', 100)->nullable()->index();
+
+            // Unique, not merely indexed: this is the last line of defence
+            // against recording the same gateway transaction twice. The
+            // callers claim their own row first, but that check is a read
+            // — only the constraint survives two concurrent returns.
+            $table->string('external_reference', 100)->nullable()->unique();
             $table->unsignedBigInteger('factura_id')->nullable();
             $table->dateTime('fecha_pago')->nullable();
             $table->date('fecha_vencimiento_original')->nullable();

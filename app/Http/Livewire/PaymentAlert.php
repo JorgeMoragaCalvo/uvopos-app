@@ -5,9 +5,10 @@ namespace App\Http\Livewire;
 use App\Enums\PaymentStatus;
 use App\Models\Customer;
 use App\Models\User;
+use App\Models\WebpayTransaction;
 use App\Support\Rut;
-use App\Support\Webpay;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Transbank\Webpay\WebpayPlus\Transaction;
@@ -30,7 +31,7 @@ class PaymentAlert extends Component
     /** @var bool True after a lookup that found no customer. */
     public $notFound = false;
 
-    /** @var string|null 'success'|'failed' after returning from Webpay. */
+    /** @var string|null success|declined|aborted|error|failed after returning from Webpay. */
     public $paymentResult = null;
 
     /** @var bool Awaiting the staff confirmation click for suspend(). */
@@ -130,25 +131,42 @@ class PaymentAlert extends Component
             return;
         }
 
-        session(['webpay_pending' => [
+        // Persisted, not put in the session: Transbank returns the
+        // customer with a cross-site POST, which carries no SameSite=Lax
+        // cookie, so the return leg has to find this by buy order. It also
+        // carries the payer — suscriptor_payments.user_id is NOT NULL in
+        // production and the return lands unauthenticated.
+        $transaction = WebpayTransaction::create([
+            'buy_order' => WebpayTransaction::makeBuyOrder($this->customer->id),
+            'session_id' => uniqid('pa-', true),
             'empresa_id' => $this->customer->id,
-            'search' => $this->search,
-            // suscriptor_payments.user_id is NOT NULL in production and
-            // means "who took the payment", so it has to travel with the
-            // pending payload — the Transbank return lands unauthenticated.
             'user_id' => Auth::id(),
-        ]]);
+            'amount' => $this->customer->charge_amount,
+            'search' => $this->search,
+            'return_to' => 'payment-alert',
+        ]);
 
-        $buyOrder = 'PA' . $this->customer->id . '-' . now()->timestamp;
-        $sessionId = uniqid('pa-', true);
-        $returnUrl = route('webpay.return');
+        try {
+            $response = app(Transaction::class)->create(
+                $transaction->buy_order,
+                $transaction->session_id,
+                $transaction->amount_clp,
+                route('webpay.return')
+            );
+        } catch (\Throwable $e) {
+            // Transbank unreachable, or credentials rejected. Nothing was
+            // charged; without this the exception reaches Livewire as a 500.
+            Log::error('Webpay transaction create failed', [
+                'exception' => $e->getMessage(),
+                'buy_order' => $transaction->buy_order,
+            ]);
 
-        $response = (new Transaction(Webpay::options()))->create(
-            $buyOrder,
-            $sessionId,
-            $this->customer->charge_amount,
-            $returnUrl
-        );
+            $transaction->update(['status' => WebpayTransaction::STATUS_FAILED]);
+
+            $this->addError('search', 'No se pudo iniciar el pago. Intente nuevamente en unos minutos.');
+
+            return;
+        }
 
         return redirect()->away($response->getUrl() . '?token_ws=' . $response->getToken());
     }
