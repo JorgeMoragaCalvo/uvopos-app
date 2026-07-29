@@ -35,6 +35,16 @@
                     movimientos ya importados no se duplican.
                 </p>
 
+                @if (config('bank_reconciliation.auto_confirm.enabled'))
+                    <p class="text-muted">
+                        Los depósitos que traen el <strong>RUT del pagador en la glosa</strong> y
+                        el <strong>monto exacto del plan</strong>, sin otra empresa igual de
+                        probable, se concilian solos: el pago queda registrado al importar y el
+                        movimiento aparece como <em>Conciliado automáticamente</em>. El resto
+                        espera su revisión en Movimientos.
+                    </p>
+                @endif
+
                 <form wire:submit.prevent="import">
                     <div class="form-group">
                         <label for="recon-bank">Banco</label>
@@ -74,9 +84,10 @@
             <div class="card-header d-flex justify-content-between align-items-center">
                 <strong>Movimientos</strong>
                 <select class="form-control form-control-sm w-auto" wire:model="statusFilter">
-                    <option value="">Pendientes ({{ $counts['suggested'] + $counts['unmatched'] }})</option>
+                    <option value="">Pendientes y automáticos ({{ $counts['suggested'] + $counts['unmatched'] + $counts['auto'] }})</option>
                     <option value="suggested">Con sugerencia ({{ $counts['suggested'] }})</option>
                     <option value="unmatched">Sin sugerencia ({{ $counts['unmatched'] }})</option>
+                    <option value="auto">Conciliados automáticamente ({{ $counts['auto'] }})</option>
                     <option value="matched">Conciliados ({{ $counts['matched'] }})</option>
                     <option value="ignored">Ignorados ({{ $counts['ignored'] }})</option>
                 </select>
@@ -132,9 +143,22 @@
                                             @endif
                                         </td>
                                         <td class="text-right text-nowrap">
+                                            {{--
+                                                A resolved movement has no actions left, and that is the
+                                                whole answer for an automatically conciliated one: it lands
+                                                here, so no Conciliar / Asignar / Ignorar is rendered, and
+                                                the payment id below suppresses "Devolver a la lista" too —
+                                                money moved, and that is not a queue correction.
+                                            --}}
                                             @if ($movement->is_resolved)
                                                 <span class="badge {{ $movement->status === 'matched' ? 'badge-success' : 'badge-secondary' }}">
-                                                    {{ $movement->status === 'matched' ? 'Conciliado' : 'Ignorado' }}
+                                                    @if ($movement->status !== 'matched')
+                                                        Ignorado
+                                                    @elseif ($movement->auto_confirmed)
+                                                        Conciliado automáticamente
+                                                    @else
+                                                        Conciliado
+                                                    @endif
                                                 </span>
                                                 @if ($movement->suscriptor_payment_id)
                                                     <br><small class="text-muted">Pago #{{ $movement->suscriptor_payment_id }}</small>

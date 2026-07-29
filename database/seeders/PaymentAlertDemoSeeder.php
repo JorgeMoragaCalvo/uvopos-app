@@ -122,7 +122,9 @@ class PaymentAlertDemoSeeder extends Seeder
             'Cuenta Corriente;000-98765-43;;;',
             ';;;;',
             'Fecha;Descripción;N° Documento;Cargos;Abonos',
-            // Unambiguous: RUT in the glosa, exact plan amount, near the due date.
+            // Unambiguous: RUT in the glosa, exact plan amount, near the due
+            // date — so the import reconciles this one itself and it arrives
+            // as "Conciliado automáticamente", with the company reactivated.
             $date(3) . ';TRANSFERENCIA DE ' . $suspendable->rut . ' DEMO OVERDUE SUSPENDABLE;100234;;40.000',
             // The Transbank payout for the settlement tab.
             $date(2) . ';ABONO TRANSBANK LIQUIDACION DIARIA;100235;;120.000',

@@ -9,13 +9,17 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /**
  * A line from an imported cartola and what was decided about it.
  *
- * The lifecycle is deliberately one-way and staff-driven:
+ * The lifecycle is one-way:
  *
- *   unmatched ─┬─> suggested ──> matched   (staff confirmed a company)
+ *   unmatched ─┬─> suggested ──> matched   (a company was confirmed)
  *              └─────────────── ignored    (not a subscription payment)
  *
- * Only `matched` has a financial effect, and only a staff click produces
- * it — the match engine never advances a movement past `suggested`.
+ * Only `matched` has a financial effect. Almost always that takes a staff
+ * click; the one exception is a deposit carrying the payer's RUT and the
+ * exact plan amount with no rival candidate, which
+ * {@see \App\Services\ImportCartola} confirms itself and flags
+ * `auto_confirmed`. Once `suscriptor_payment_id` is set there is no way
+ * back — see {@see \App\Http\Livewire\BankReconciliation::returnToQueue()}.
  */
 class BankMovement extends Model
 {
@@ -45,11 +49,13 @@ class BankMovement extends Model
         'match_reason',
         'reconciled_by',
         'reconciled_at',
+        'auto_confirmed',
     ];
 
     protected $casts = [
         'posted_at' => 'date',
         'reconciled_at' => 'datetime',
+        'auto_confirmed' => 'boolean',
     ];
 
     public function statement(): BelongsTo
@@ -73,10 +79,34 @@ class BankMovement extends Model
         return $query->where('direction', self::DIRECTION_CREDIT);
     }
 
-    /** Still needs a human decision. */
+    /**
+     * Still needs a human decision. This is the "to do" count — the tab
+     * badge and the one on /payment-alert — not what the review screen
+     * lists; see {@see scopeQueue()}.
+     */
     public function scopePending(Builder $query): Builder
     {
         return $query->whereIn('status', [self::STATUS_UNMATCHED, self::STATUS_SUGGESTED]);
+    }
+
+    /**
+     * What the review screen shows by default: everything still to decide,
+     * plus the deposits the import reconciled by itself. Those need no
+     * action, but they are the cartola's work and staff have to see it
+     * happen — an automatic payment nobody can find is worse than no
+     * automation.
+     *
+     * Staff confirmations and Transbank payout tags stay out: one has
+     * already been reviewed, the other belongs to the settlement tab.
+     */
+    public function scopeQueue(Builder $query): Builder
+    {
+        // Grouped: an unparenthesised orWhere would escape any other
+        // constraint the caller put on the query.
+        return $query->where(function (Builder $inner) {
+            $inner->whereIn('status', [self::STATUS_UNMATCHED, self::STATUS_SUGGESTED])
+                ->orWhere('auto_confirmed', true);
+        });
     }
 
     public function getIsResolvedAttribute(): bool

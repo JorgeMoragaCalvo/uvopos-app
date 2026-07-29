@@ -31,6 +31,16 @@ class BankStatement extends Model
         'period_end' => 'date',
     ];
 
+    /**
+     * How many of this import's movements {@see \App\Services\ImportCartola}
+     * reconciled on its own. Reported to the staff member who uploaded the
+     * file; not a column, because it describes the run rather than the
+     * statement — the movements themselves carry `auto_confirmed`.
+     *
+     * @var int
+     */
+    public $autoConfirmedCount = 0;
+
     public function movements(): HasMany
     {
         return $this->hasMany(BankMovement::class);

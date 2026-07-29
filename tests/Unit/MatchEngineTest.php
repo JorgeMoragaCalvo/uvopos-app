@@ -74,6 +74,39 @@ class MatchEngineTest extends TestCase
     }
 
     /**
+     * The signals are reported by key, separately from the Spanish
+     * `reasons` they are shown as, because {@see \App\Services\ImportCartola}
+     * decides whether to reconcile without a human from exactly these two —
+     * and must not do it by reading display copy.
+     */
+    public function test_the_signals_that_fired_are_reported_by_key(): void
+    {
+        $movement = $this->movement('TRANSFERENCIA DE 76.543.210-3 COMERCIAL ANDES', 35000, '765432103');
+        $best = $this->engine()->match($movement, [
+            $this->company(1, '765432103', 'Comercial Andes SpA', 35000),
+        ])->best();
+
+        $this->assertTrue($best->hasSignal('rut_in_glosa'));
+        $this->assertTrue($best->hasAllSignals(['rut_in_glosa', 'amount_exact']));
+        $this->assertFalse($best->hasSignal('amount_close'));
+
+        // An empty requirement is never satisfied: the caller asking is
+        // deciding whether to move money unattended.
+        $this->assertFalse($best->hasAllSignals([]));
+    }
+
+    public function test_an_approximate_amount_is_not_reported_as_exact(): void
+    {
+        $movement = $this->movement('TRANSFERENCIA DE 76.543.210-3 COMERCIAL ANDES', 34500, '765432103');
+        $best = $this->engine()->match($movement, [
+            $this->company(1, '765432103', 'Comercial Andes SpA', 35000),
+        ])->best();
+
+        $this->assertTrue($best->hasSignal('amount_close'));
+        $this->assertFalse($best->hasAllSignals(['rut_in_glosa', 'amount_exact']));
+    }
+
+    /**
      * The amount alone is the weakest possible evidence: every company on
      * the same plan pays it. It must not reach the suggestion threshold
      * on its own.
