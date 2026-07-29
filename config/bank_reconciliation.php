@@ -15,7 +15,9 @@ return [
     |   >= suggest         : offered, but the staff member must tick it
     |   <  suggest         : left unmatched
     |
-    | Nothing is ever applied without a staff click, whatever the score.
+    | Score alone never applies a payment — see `auto_confirm` below, which
+    | is decided on which signals matched, not on how many points they add
+    | up to.
     |
     */
 
@@ -34,6 +36,32 @@ return [
         'amount_close' => 15,
         'date_window' => 15,
         'name_tokens' => 10,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Automatic confirmation
+    |--------------------------------------------------------------------------
+    |
+    | A deposit whose glosa carries the payer's RUT (check digit validated)
+    | *and* whose amount equals the plan price to the peso has nothing left
+    | for a human to decide, so the importer records the payment itself and
+    | the movement arrives already conciliada.
+    |
+    | `require_signals` lists the signals above that must all be present;
+    | the match must also be unambiguous (no runner-up within `tie_margin`).
+    | Requiring `amount_exact` is what keeps a partial transfer — which
+    | would still buy a full period — out of this path.
+    |
+    | There is no undo once a payment exists, so this is the kill switch:
+    | set BANK_RECON_AUTO_CONFIRM=false and every deposit goes back to
+    | waiting for a staff click.
+    |
+    */
+
+    'auto_confirm' => [
+        'enabled' => env('BANK_RECON_AUTO_CONFIRM', true),
+        'require_signals' => ['rut_in_glosa', 'amount_exact'],
     ],
 
     /*

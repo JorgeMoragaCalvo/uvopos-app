@@ -20,8 +20,14 @@ use Tests\TestCase;
  * The staff reconciliation screen at /conciliacion-bancaria: importing a
  * cartola, and turning a suggested match into a recorded payment.
  *
- * The invariant these tests protect is that importing never moves money
- * and confirming moves it exactly once.
+ * The invariant these tests protect is that a deposit staff have to decide
+ * on moves no money until they say so, and then moves it exactly once.
+ *
+ * Automatic confirmation is switched off throughout, which makes this file
+ * the regression test for the kill switch as well: with
+ * `auto_confirm.enabled` false, every deposit — including the one carrying
+ * a RUT and the exact amount — waits in the queue.
+ * {@see AutoConfirmCartolaTest} covers it switched on.
  */
 class BankReconciliationTest extends TestCase
 {
@@ -32,6 +38,8 @@ class BankReconciliationTest extends TestCase
         parent::setUp();
 
         Storage::fake('cartolas');
+
+        config(['bank_reconciliation.auto_confirm.enabled' => false]);
 
         // The cartola fixtures cover the first week of March 2026; freeze
         // "today" just after them so the scenario stays coherent as real

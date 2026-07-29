@@ -4,14 +4,12 @@ namespace App\Http\Livewire;
 
 use App\Models\BankMovement;
 use App\Models\Customer;
+use App\Services\ConfirmMovement;
 use App\Services\ImportCartola;
-use App\Services\RecordPayment;
 use App\Services\SettlementReport;
 use App\Support\Cartola\CartolaException;
 use App\Support\Rut;
-use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 use Livewire\WithPagination;
@@ -20,11 +18,16 @@ use Livewire\WithPagination;
  * Staff screen for bank reconciliation: import a cartola, review the
  * deposits it contains, and confirm which customer each one paid for.
  *
- * Confirming is what records the payment, and it is always a deliberate
- * click — the import only ever produces suggestions. That mirrors the
- * module's existing rule for suspension: the system proposes, staff
- * decide, because both directions of a wrong guess cost a real customer
- * real money.
+ * Confirming here is what records the payment, and it is always a
+ * deliberate click. That mirrors the module's rule for suspension: the
+ * system proposes, staff decide, because both directions of a wrong guess
+ * cost a real customer real money.
+ *
+ * The queue is therefore what the import could not settle on its own.
+ * {@see ImportCartola} reconciles the deposits whose evidence leaves
+ * nothing to decide — the payer's RUT plus the exact plan amount, with no
+ * rival candidate — and those arrive here already resolved, with no
+ * actions on the row.
  */
 class BankReconciliation extends Component
 {
@@ -37,6 +40,13 @@ class BankReconciliation extends Component
     public const TAB_IMPORT = 'importar';
     public const TAB_SETTLEMENTS = 'liquidaciones';
 
+    /**
+     * Filter value for the movements the import reconciled itself. Not a
+     * status — those rows are `matched`; what sets them apart is
+     * `auto_confirmed`.
+     */
+    public const FILTER_AUTO = 'auto';
+
     /** @var string Which section of the page is showing. */
     public $tab = self::TAB_MOVEMENTS;
 
@@ -46,7 +56,11 @@ class BankReconciliation extends Component
     /** @var \Livewire\TemporaryUploadedFile|null */
     public $cartola;
 
-    /** @var string A BankMovement::STATUS_* constant, or '' for everything pending. */
+    /**
+     * @var string A BankMovement::STATUS_* constant, self::FILTER_AUTO, or
+     *             '' for the default list: everything pending plus what
+     *             the import reconciled on its own.
+     */
     public $statusFilter = '';
 
     /** @var string|null Shown after a successful import. */
@@ -120,6 +134,16 @@ class BankReconciliation extends Component
 
         $this->reset('cartola');
         $this->importMessage = 'Cartola importada: ' . $statement->movement_count . ' movimientos nuevos.';
+
+        // Those payments are already recorded, so say so on the way in
+        // rather than leaving staff to notice rows they never confirmed.
+        if ($statement->autoConfirmedCount > 0) {
+            $this->importMessage .= ' ' . $statement->autoConfirmedCount
+                . ($statement->autoConfirmedCount === 1
+                    ? ' se concilió automáticamente.'
+                    : ' se conciliaron automáticamente.');
+        }
+
         $this->tab = self::TAB_MOVEMENTS;
         $this->resetPage();
     }
@@ -149,10 +173,10 @@ class BankReconciliation extends Component
      * this screen that moves money.
      *
      * Two things keep it from doing so twice. The staff member must have
-     * opened the confirmation step for this exact movement, and the
-     * movement is claimed with a conditional UPDATE inside the
-     * transaction: a second click, a stale tab or a second staff member
-     * finds nothing left to claim and does nothing.
+     * opened the confirmation step for this exact movement, and
+     * {@see ConfirmMovement} claims the movement with a conditional UPDATE
+     * inside the transaction: a second click, a stale tab or a second
+     * staff member finds nothing left to claim and does nothing.
      */
     public function confirmMatch(int $movementId, ?int $empresaId = null): void
     {
@@ -178,32 +202,7 @@ class BankReconciliation extends Component
             return;
         }
 
-        DB::transaction(function () use ($movement, $customer) {
-            $claimed = BankMovement::whereKey($movement->id)
-                ->whereNotIn('status', [BankMovement::STATUS_MATCHED, BankMovement::STATUS_IGNORED])
-                ->update([
-                    'status' => BankMovement::STATUS_MATCHED,
-                    'empresa_id' => $customer->id,
-                    'reconciled_by' => Auth::id(),
-                    'reconciled_at' => now(),
-                ]);
-
-            if ($claimed === 0) {
-                return;
-            }
-
-            $payment = app(RecordPayment::class)->apply(
-                $customer,
-                $movement->amount_clp,
-                Carbon::parse($movement->posted_at),
-                RecordPayment::SOURCE_BANK_TRANSFER,
-                $movement->reference,
-                (int) Auth::id(),
-                'Transferencia bancaria conciliada (' . $movement->posted_at->format('d/m/Y') . ')'
-            );
-
-            BankMovement::whereKey($movement->id)->update(['suscriptor_payment_id' => $payment->id]);
-        });
+        app(ConfirmMovement::class)->confirm($movement, $customer, (int) Auth::id());
 
         $this->cancelConfirm();
         $this->assigningMovementId = null;
@@ -388,14 +387,37 @@ class BankReconciliation extends Component
         return (array) config('bank_reconciliation.banks', []);
     }
 
+    /**
+     * The dropdown's entries have to be disjoint, or the same movement is
+     * counted under two labels: `auto` and `matched` both describe
+     * `status = matched` rows, so the latter is narrowed to the ones a
+     * person resolved — a staff confirmation, or the Transbank payout tag.
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder  $query
+     * @return \Illuminate\Database\Eloquent\Builder
+     */
+    private function applyFilter($query)
+    {
+        if ($this->statusFilter === self::FILTER_AUTO) {
+            return $query->where('auto_confirmed', true);
+        }
+
+        if ($this->statusFilter === BankMovement::STATUS_MATCHED) {
+            return $query->where('status', BankMovement::STATUS_MATCHED)
+                ->where('auto_confirmed', false);
+        }
+
+        return $query->where('status', $this->statusFilter);
+    }
+
     public function render()
     {
         $movements = BankMovement::query()
             ->with('customer')
             ->when($this->statusFilter !== '', function ($query) {
-                return $query->where('status', $this->statusFilter);
+                return $this->applyFilter($query);
             }, function ($query) {
-                return $query->pending();
+                return $query->queue();
             })
             ->orderByDesc('posted_at')
             ->orderByDesc('id')
@@ -408,7 +430,10 @@ class BankReconciliation extends Component
             'counts' => [
                 BankMovement::STATUS_SUGGESTED => BankMovement::where('status', BankMovement::STATUS_SUGGESTED)->count(),
                 BankMovement::STATUS_UNMATCHED => BankMovement::where('status', BankMovement::STATUS_UNMATCHED)->count(),
-                BankMovement::STATUS_MATCHED => BankMovement::where('status', BankMovement::STATUS_MATCHED)->count(),
+                self::FILTER_AUTO => BankMovement::where('auto_confirmed', true)->count(),
+                BankMovement::STATUS_MATCHED => BankMovement::where('status', BankMovement::STATUS_MATCHED)
+                    ->where('auto_confirmed', false)
+                    ->count(),
                 BankMovement::STATUS_IGNORED => BankMovement::where('status', BankMovement::STATUS_IGNORED)->count(),
             ],
             'settlements' => $this->tab === self::TAB_SETTLEMENTS

@@ -10,9 +10,14 @@ use App\Support\Text;
  *
  * Chilean transfers carry no structured reference — the payer types
  * whatever they like into the glosa — so no single signal is conclusive.
- * The engine combines four of them and hands the ranked result to a human
- * along with the reasons, exactly like the module's suspension flow: the
- * system proposes, staff decide.
+ * The engine combines four of them and hands the ranked result, with the
+ * reasons, to whoever asked: usually the review queue, and — when the
+ * result carries the identity-grade signals {@see \App\Services\ImportCartola} requires —
+ * the importer, which records that payment without a human.
+ *
+ * The engine itself never decides that; it reports what matched
+ * ({@see ScoredCandidate::$signals}) and how the candidates compare
+ * ({@see MatchResult::$isAmbiguous}).
  *
  * Pure logic on purpose. Every threshold is injected rather than read
  * from config(), so this can be unit-tested without the Laravel container
@@ -126,25 +131,30 @@ class MatchEngine
     {
         $score = 0;
         $reasons = [];
+        $signals = [];
 
         if ($movement->counterpartyRut !== null && $movement->counterpartyRut === $candidate->rut) {
             $score += $this->weight('rut_in_glosa');
             $reasons[] = 'RUT en la glosa';
+            $signals[] = 'rut_in_glosa';
         }
 
         if ($candidate->chargeAmount !== null && $candidate->chargeAmount > 0) {
             if ($movement->amount === $candidate->chargeAmount) {
                 $score += $this->weight('amount_exact');
                 $reasons[] = 'monto exacto';
+                $signals[] = 'amount_exact';
             } elseif ($this->amountIsClose($movement->amount, $candidate->chargeAmount)) {
                 $score += $this->weight('amount_close');
                 $reasons[] = 'monto aproximado';
+                $signals[] = 'amount_close';
             }
         }
 
         if ($this->dateIsInWindow($movement, $candidate)) {
             $score += $this->weight('date_window');
             $reasons[] = 'fecha cercana al vencimiento';
+            $signals[] = 'date_window';
         }
 
         $nameScore = $this->nameScore($movement->description, $candidate->name);
@@ -152,9 +162,10 @@ class MatchEngine
         if ($nameScore > 0) {
             $score += $nameScore;
             $reasons[] = 'nombre en la glosa';
+            $signals[] = 'name_tokens';
         }
 
-        return new ScoredCandidate($candidate, $score, $reasons);
+        return new ScoredCandidate($candidate, $score, $reasons, $signals);
     }
 
     /**
