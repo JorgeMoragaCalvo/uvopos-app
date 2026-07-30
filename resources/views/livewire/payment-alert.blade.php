@@ -1,40 +1,99 @@
 <div>
-    {{-- Bootstrap 4 has no orange alert/badge variant --}}
-    <style>
-        .alert-orange {
-            color: #7a3e00;
-            background-color: #ffe5cc;
-            border-color: #ffd6ad;
-        }
-        .badge-orange {
-            color: #fff;
-            background-color: #fd7e14;
-        }
-    </style>
+    {{-- One @php block, not the inline @php(...) form: Blade extracts
+         @php…@endphp with a non-greedy regex, so mixing the two shapes in
+         one file makes the first inline tag swallow the markup between them. --}}
+    @php
+        $totalCustomers = array_sum($counts);
 
-    <div class="card">
-        <div class="card-header">
-            <strong>Estado de pago del cliente</strong>
+        $tileCaptions = [
+            \App\Enums\PaymentStatus::ON_TIME => 'Sin acciones pendientes',
+            \App\Enums\PaymentStatus::DUE_SOON => 'Requieren seguimiento',
+            \App\Enums\PaymentStatus::OVERDUE => 'Requieren su atención',
+        ];
+    @endphp
+
+    {{-- Status counts double as the filter control: each tile fires the same
+         filterByStatus() call the old button row did. --}}
+    <div class="pa-stats">
+        <button type="button"
+                class="pa-stat pa-stat--info {{ $statusFilter === '' ? 'is-active' : '' }}"
+                aria-pressed="{{ $statusFilter === '' ? 'true' : 'false' }}"
+                wire:click="filterByStatus('')">
+            <span class="pa-stat__icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
+                     aria-hidden="true" focusable="false">
+                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+                    <circle cx="9" cy="7" r="4"/>
+                    <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                </svg>
+            </span>
+            <span class="pa-stat__label">Todos</span>
+            <span class="pa-stat__value">{{ $totalCustomers }}</span>
+            <span class="pa-stat__meta">clientes registrados</span>
+            <span class="pa-stat__foot">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                     aria-hidden="true" focusable="false">
+                    <path d="M3 12h18"/>
+                    <path d="M14 5l7 7-7 7"/>
+                </svg>
+                Ver la lista completa
+            </span>
+        </button>
+
+        @foreach ([\App\Enums\PaymentStatus::ON_TIME, \App\Enums\PaymentStatus::DUE_SOON, \App\Enums\PaymentStatus::OVERDUE] as $filterStatus)
+            <button type="button"
+                    class="pa-stat pa-stat--{{ $filterStatus }} {{ $statusFilter === $filterStatus ? 'is-active' : '' }}"
+                    aria-pressed="{{ $statusFilter === $filterStatus ? 'true' : 'false' }}"
+                    wire:click="filterByStatus('{{ $filterStatus }}')">
+                <span class="pa-stat__icon">
+                    @if ($filterStatus === \App\Enums\PaymentStatus::ON_TIME)
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                             stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
+                             aria-hidden="true" focusable="false">
+                            <circle cx="12" cy="12" r="9"/>
+                            <path d="M8.5 12.5l2.5 2.5 4.5-5"/>
+                        </svg>
+                    @elseif ($filterStatus === \App\Enums\PaymentStatus::DUE_SOON)
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                             stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
+                             aria-hidden="true" focusable="false">
+                            <circle cx="12" cy="12" r="9"/>
+                            <path d="M12 7v5l3.5 2"/>
+                        </svg>
+                    @else
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                             stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
+                             aria-hidden="true" focusable="false">
+                            <path d="M12 3.5 22 20H2L12 3.5Z"/>
+                            <path d="M12 10v4"/>
+                            <path d="M12 17.2h.01"/>
+                        </svg>
+                    @endif
+                </span>
+                <span class="pa-stat__label">{{ \App\Enums\PaymentStatus::label($filterStatus) }}</span>
+                <span class="pa-stat__value">{{ $counts[$filterStatus] }}</span>
+                <span class="pa-stat__meta">de {{ $totalCustomers }} clientes</span>
+                <span class="pa-stat__foot">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                         aria-hidden="true" focusable="false">
+                        <path d="M3 12h18"/>
+                        <path d="M14 5l7 7-7 7"/>
+                    </svg>
+                    {{ $tileCaptions[$filterStatus] }}
+                </span>
+            </button>
+        @endforeach
+    </div>
+
+    <div class="pa-card">
+        <div class="pa-card__header">
+            <h2 class="pa-card__title">Estado de pago del cliente</h2>
         </div>
-        <div class="card-body">
-            <div class="mb-3 d-flex flex-wrap align-items-center" style="gap: .5rem;">
-                <button type="button"
-                        class="btn btn-sm {{ $statusFilter === '' ? 'btn-secondary' : 'btn-outline-secondary' }}"
-                        wire:click="filterByStatus('')">
-                    Todos
-                </button>
-                @foreach ([\App\Enums\PaymentStatus::ON_TIME, \App\Enums\PaymentStatus::DUE_SOON, \App\Enums\PaymentStatus::OVERDUE] as $filterStatus)
-                    <button type="button"
-                            class="btn btn-sm {{ $statusFilter === $filterStatus ? 'btn-dark' : 'btn-outline-dark' }}"
-                            wire:click="filterByStatus('{{ $filterStatus }}')">
-                        {{ \App\Enums\PaymentStatus::label($filterStatus) }}
-                        <span class="badge {{ \App\Enums\PaymentStatus::badgeClass($filterStatus) }}">
-                            {{ $counts[$filterStatus] }}
-                        </span>
-                    </button>
-                @endforeach
-            </div>
-
+        <div class="pa-card__body">
             <form wire:submit.prevent="lookup">
                 <div class="form-group">
                     <label for="payment-alert-search">RUT o ID de cliente</label>
@@ -168,23 +227,50 @@
                     @endif
                 </div>
             @endif
+        </div>
+    </div>
 
-            <hr class="my-4">
-
-            <h6 class="mb-3">
+    <div class="pa-card">
+        <div class="pa-card__header">
+            <h2 class="pa-card__title">
                 Todos los clientes
                 @if ($statusFilter !== '')
                     <small class="text-muted">— {{ \App\Enums\PaymentStatus::label($statusFilter) }}</small>
                 @endif
-            </h6>
+            </h2>
+            <div class="pa-card__tools">
+                <button type="button"
+                        class="pa-pill {{ $statusFilter === '' ? 'is-active' : '' }}"
+                        aria-pressed="{{ $statusFilter === '' ? 'true' : 'false' }}"
+                        wire:click="filterByStatus('')">
+                    Todos
+                    <span class="pa-pill__count">{{ $totalCustomers }}</span>
+                </button>
+                @foreach ([\App\Enums\PaymentStatus::ON_TIME, \App\Enums\PaymentStatus::DUE_SOON, \App\Enums\PaymentStatus::OVERDUE] as $filterStatus)
+                    <button type="button"
+                            class="pa-pill pa-pill--{{ $filterStatus }} {{ $statusFilter === $filterStatus ? 'is-active' : '' }}"
+                            aria-pressed="{{ $statusFilter === $filterStatus ? 'true' : 'false' }}"
+                            wire:click="filterByStatus('{{ $filterStatus }}')">
+                        {{ \App\Enums\PaymentStatus::label($filterStatus) }}
+                        <span class="pa-pill__count">{{ $counts[$filterStatus] }}</span>
+                    </button>
+                @endforeach
+                @if ($statusFilter !== '')
+                    <button type="button" class="pa-link" wire:click="filterByStatus('')">Ver todos</button>
+                @endif
+            </div>
+        </div>
 
-            @if ($customers->isEmpty())
+        @if ($customers->isEmpty())
+            <div class="pa-card__body">
                 <div class="alert alert-secondary mb-0" role="alert">
                     No hay clientes en este estado.
                 </div>
-            @else
+            </div>
+        @else
+            <div class="pa-card__body pa-card__body--flush">
                 <div class="table-responsive">
-                    <table class="table table-sm table-hover">
+                    <table class="table table-sm table-hover pa-table">
                         <thead>
                             <tr>
                                 <th>Cliente</th>
@@ -203,7 +289,7 @@
                                     <td>{{ $row->name }}</td>
                                     <td>{{ $row->formatted_rut }}</td>
                                     <td>{{ $row->plan_type }}</td>
-                                    <td>
+                                    <td class="pa-due pa-due--{{ $row->payment_status }}">
                                         {{ $row->payment_date ? $row->payment_date->format('d-m-Y') : '—' }}
                                     </td>
                                     <td>
@@ -219,9 +305,11 @@
                         </tbody>
                     </table>
                 </div>
+            </div>
 
+            <div class="pa-card__foot">
                 {{ $customers->links() }}
-            @endif
-        </div>
+            </div>
+        @endif
     </div>
 </div>

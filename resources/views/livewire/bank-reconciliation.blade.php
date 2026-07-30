@@ -1,12 +1,12 @@
 <div>
-    <ul class="nav nav-tabs mb-3">
+    <ul class="pa-tabs">
         @foreach ([
             \App\Http\Livewire\BankReconciliation::TAB_MOVEMENTS => 'Movimientos',
             \App\Http\Livewire\BankReconciliation::TAB_IMPORT => 'Importar cartola',
             \App\Http\Livewire\BankReconciliation::TAB_SETTLEMENTS => 'Liquidaciones Transbank',
         ] as $tabKey => $tabLabel)
-            <li class="nav-item">
-                <a class="nav-link {{ $tab === $tabKey ? 'active' : '' }}"
+            <li class="pa-tabs__item">
+                <a class="pa-tabs__link {{ $tab === $tabKey ? 'is-active' : '' }}"
                    href="#"
                    wire:click.prevent="selectTab('{{ $tabKey }}')">
                     {{ $tabLabel }}
@@ -26,9 +26,9 @@
     {{-- Importar cartola                                              --}}
     {{-- ------------------------------------------------------------- --}}
     @if ($tab === \App\Http\Livewire\BankReconciliation::TAB_IMPORT)
-        <div class="card">
-            <div class="card-header"><strong>Importar cartola</strong></div>
-            <div class="card-body">
+        <div class="pa-card">
+            <div class="pa-card__header"><strong>Importar cartola</strong></div>
+            <div class="pa-card__body">
                 <p class="text-muted">
                     Descargue la cartola desde el portal de su banco y guárdela como
                     <strong>CSV</strong> (en Excel: Archivo → Guardar como → CSV). Los
@@ -80,8 +80,8 @@
     {{-- Movimientos por conciliar                                     --}}
     {{-- ------------------------------------------------------------- --}}
     @if ($tab === \App\Http\Livewire\BankReconciliation::TAB_MOVEMENTS)
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
+        <div class="pa-card">
+            <div class="pa-card__header">
                 <strong>Movimientos</strong>
                 <select class="form-control form-control-sm w-auto" wire:model="statusFilter">
                     <option value="">Pendientes y automáticos ({{ $counts['suggested'] + $counts['unmatched'] + $counts['auto'] }})</option>
@@ -92,14 +92,14 @@
                     <option value="ignored">Ignorados ({{ $counts['ignored'] }})</option>
                 </select>
             </div>
-            <div class="card-body">
+            <div class="pa-card__body {{ $movements->isEmpty() ? '' : 'pa-card__body--flush' }}">
                 @if ($movements->isEmpty())
                     <div class="alert alert-secondary mb-0" role="alert">
                         No hay movimientos en este estado. Importe una cartola para comenzar.
                     </div>
                 @else
                     <div class="table-responsive">
-                        <table class="table table-sm">
+                        <table class="table table-sm pa-table">
                             <thead>
                                 <tr>
                                     <th>Fecha</th>
@@ -256,7 +256,9 @@
                         </table>
                     </div>
 
-                    {{ $movements->links() }}
+                    <div class="pa-card__foot">
+                        {{ $movements->links() }}
+                    </div>
                 @endif
             </div>
         </div>
@@ -266,9 +268,9 @@
     {{-- Liquidaciones Transbank                                       --}}
     {{-- ------------------------------------------------------------- --}}
     @if ($tab === \App\Http\Livewire\BankReconciliation::TAB_SETTLEMENTS)
-        <div class="card">
-            <div class="card-header"><strong>Liquidaciones Transbank</strong></div>
-            <div class="card-body">
+        <div class="pa-card">
+            <div class="pa-card__header"><strong>Liquidaciones Transbank</strong></div>
+            <div class="pa-card__body">
                 <p class="text-muted">
                     Cada depósito de Transbank se compara con la suma de los pagos Webpay
                     registrados {{ config('bank_reconciliation.settlement_lag_days') }} día(s)
@@ -282,7 +284,7 @@
                     </div>
                 @else
                     <div class="table-responsive">
-                        <table class="table table-sm">
+                        <table class="table table-sm pa-table">
                             <thead>
                                 <tr>
                                     <th>Depósito</th>
