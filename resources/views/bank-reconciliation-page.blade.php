@@ -5,31 +5,51 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Conciliación bancaria</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css">
+    @include('partials.admin-styles')
     @livewireStyles
 </head>
-<body class="bg-light">
-    <div class="container py-5">
-        <div class="row justify-content-center">
-            <div class="col-lg-11">
-                <div class="d-flex justify-content-between align-items-center mb-3">
+<body>
+    @php($pendingMovements = \App\Models\BankMovement::pending()->credits()->count())
+
+    <div class="pa-shell">
+        @include('partials.admin-sidebar')
+
+        <main class="pa-main">
+            <div class="pa-main__inner">
+                <header class="pa-header">
                     <div>
-                        <h1 class="h5 mb-0">Conciliación bancaria</h1>
-                        <small class="text-muted">{{ auth()->user()->name }}</small>
+                        <h1 class="pa-header__title">Conciliación bancaria</h1>
+                        <span class="pa-header__subtitle">Importe la cartola y revise los depósitos por conciliar</span>
                     </div>
-                    <div class="d-flex align-items-center">
-                        <a href="{{ route('payment-alert') }}" class="btn btn-sm btn-outline-primary mr-2">
-                            Alerta de pago
-                        </a>
+                    <div class="pa-header__actions">
+                        <div class="pa-user-chip">
+                            <span class="pa-user-chip__avatar" aria-hidden="true">{{ mb_substr(auth()->user()->name, 0, 1) }}</span>
+                            <span>
+                                <span class="pa-user-chip__name">{{ auth()->user()->name }}</span>
+                                <span class="pa-user-chip__role">Administrador</span>
+                            </span>
+                        </div>
                         <form method="POST" action="{{ route('logout') }}">
                             @csrf
-                            <button type="submit" class="btn btn-sm btn-outline-secondary">Cerrar sesión</button>
+                            <button type="submit" class="pa-logout">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                     stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
+                                     aria-hidden="true" focusable="false">
+                                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                                    <path d="M16 17l5-5-5-5"/>
+                                    <path d="M21 12H9"/>
+                                </svg>
+                                Cerrar sesión
+                            </button>
                         </form>
                     </div>
-                </div>
+                </header>
 
                 <livewire:bank-reconciliation />
+
+                <footer class="pa-foot">Uvopos · Panel de administración</footer>
             </div>
-        </div>
+        </main>
     </div>
 
     @livewireScripts
