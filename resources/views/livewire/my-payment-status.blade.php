@@ -2,6 +2,14 @@
     {{-- The customer view renders its own status bar instead of the Bootstrap
          alert used by the staff view. The Spanish copy is still kept in sync
          with payment-alert.blade.php; the markup deliberately is not.
+
+         The bar collapses to the company name plus the pay button; the rest
+         (status, RUT, due date, plan, notices) lives in a disclosure panel
+         behind a click on the name. It is a native <details>/<summary>
+         because the app loads no JS at all — see CLAUDE.md. The panel is
+         server-rendered whether open or closed, which is also what the
+         feature tests assert against.
+
          Design tokens (--pa-*) live in resources/views/my-account-page.blade.php. --}}
     <style>
         .pa-bar {
@@ -77,11 +85,90 @@
             min-width: 0;
         }
 
+        /* The name is the disclosure trigger; the panel anchors to it. */
+        .pa-menu {
+            position: relative;
+            min-width: 0;
+        }
+
+        .pa-menu__trigger {
+            display: flex;
+            align-items: center;
+            gap: .5rem;
+            min-width: 0;
+            cursor: pointer;
+            list-style: none;
+            border-radius: var(--pa-radius-pill);
+            padding: .2rem .6rem .2rem .5rem;
+            transition: background-color .15s ease;
+        }
+
+        /* Kill the native disclosure triangle; the chevron replaces it. */
+        .pa-menu__trigger::-webkit-details-marker {
+            display: none;
+        }
+
+        .pa-menu__trigger::marker {
+            content: "";
+        }
+
+        .pa-menu__trigger:hover {
+            background: var(--pa-neutral-tint);
+        }
+
+        .pa-menu__trigger:focus-visible {
+            outline: 2px solid var(--pa-accent-strong, var(--pa-neutral-strong));
+            outline-offset: 2px;
+        }
+
+        /* Status colour stays glanceable while the label itself is hidden. */
+        .pa-menu__dot {
+            width: .5rem;
+            height: .5rem;
+            border-radius: 50%;
+            flex: 0 0 auto;
+            background: var(--pa-accent-strong, var(--pa-neutral-strong));
+        }
+
+        .pa-menu__name {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--pa-text);
+            line-height: 1.4;
+            overflow-wrap: anywhere;
+        }
+
+        .pa-menu__chevron {
+            display: block;
+            flex: 0 0 auto;
+            color: var(--pa-text-muted);
+            transition: transform .15s ease;
+        }
+
+        details[open] .pa-menu__chevron {
+            transform: rotate(180deg);
+        }
+
+        .pa-menu__panel {
+            position: absolute;
+            top: calc(100% + .625rem);
+            left: 0;
+            z-index: 1;
+            min-width: 20rem;
+            max-width: min(90vw, 26rem);
+            padding: .875rem 0 0;
+            background: var(--pa-surface);
+            border: 1px solid var(--pa-border);
+            border-radius: var(--pa-radius);
+            box-shadow: var(--pa-shadow-md);
+            overflow: hidden;
+        }
+
         .pa-status {
             display: inline-flex;
             align-items: center;
             gap: .45rem;
-            align-self: flex-start;
+            margin: 0 1rem .625rem;
             padding: .2rem .7rem .2rem .55rem;
             border-radius: var(--pa-radius-pill);
             background: var(--pa-accent-tint, var(--pa-neutral-tint));
@@ -101,16 +188,28 @@
             flex: 0 0 auto;
         }
 
-        .pa-identity {
-            font-size: 1rem;
-            font-weight: 600;
+        .pa-facts {
+            margin: 0;
+            padding: 0 1rem .875rem;
+            display: flex;
+            flex-direction: column;
+            gap: .5rem;
+        }
+
+        /* plan_type is free text with no bounded width — it must wrap. */
+        .pa-facts__row {
+            font-size: .875rem;
             color: var(--pa-text);
-            line-height: 1.4;
+            line-height: 1.5;
             overflow-wrap: anywhere;
         }
 
-        .pa-identity__rut {
-            font-weight: 400;
+        .pa-facts__label {
+            display: block;
+            font-size: .6875rem;
+            font-weight: 600;
+            letter-spacing: .04em;
+            text-transform: uppercase;
             color: var(--pa-text-muted);
         }
 
@@ -121,25 +220,9 @@
             overflow-wrap: anywhere;
         }
 
-        .pa-sep {
-            padding: 0 .1rem;
-            color: #b9c2ce;
-        }
-
         .pa-action {
             margin-left: auto;
-            display: flex;
-            align-items: center;
-            gap: 1rem;
             flex: 0 0 auto;
-        }
-
-        .pa-amount {
-            font-size: 1.375rem;
-            font-weight: 600;
-            letter-spacing: -.02em;
-            color: var(--pa-text);
-            white-space: nowrap;
         }
 
         .pa-pay {
@@ -176,11 +259,15 @@
             cursor: default;
         }
 
-        /* Notice strips attached to the bottom edge of the bar. */
+        /* Notices sit at the foot of the panel, full-bleed against its edges. */
         .pa-notice {
             border-top: 1px solid var(--pa-accent-border, var(--pa-neutral-border));
             background: var(--pa-accent-tint, var(--pa-neutral-tint));
             color: var(--pa-accent-strong, var(--pa-neutral-strong));
+            padding: .625rem 1rem;
+            font-size: .8125rem;
+            font-weight: 600;
+            line-height: 1.5;
         }
 
         .pa-strip {
@@ -233,14 +320,24 @@
                 width: 100%;
             }
 
+            .pa-menu {
+                width: 100%;
+            }
+
+            /* Span the bar instead of overflowing the viewport. */
+            .pa-menu__panel {
+                right: 0;
+                min-width: 0;
+                max-width: none;
+            }
+
             .pa-action {
                 margin-left: 0;
                 width: 100%;
-                justify-content: space-between;
             }
 
             .pa-pay {
-                flex: 1 1 auto;
+                width: 100%;
             }
 
             .pa-strip {
@@ -269,69 +366,75 @@
                     <span class="pa-detail">No hay una empresa asociada a su cuenta.</span>
                 </div>
             @else
-                <div class="pa-info">
-                    <span class="pa-status">{{ \App\Enums\PaymentStatus::label($status) }}</span>
+                <details class="pa-menu">
+                    <summary class="pa-menu__trigger" title="Ver detalle de su cuenta">
+                        <span class="pa-menu__dot" aria-hidden="true"></span>
+                        <span class="pa-menu__name">{{ $customer->name }}</span>
+                        <svg class="pa-menu__chevron" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                             stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
+                             aria-hidden="true">
+                            <path d="m6 9 6 6 6-6"/>
+                        </svg>
+                    </summary>
 
-                    <span class="pa-identity">
-                        {{ $customer->name }}
-                        <span class="pa-sep">&middot;</span>
-                        <span class="pa-identity__rut">RUT {{ $customer->formatted_rut }}</span>
-                    </span>
+                    <div class="pa-menu__panel">
+                        <span class="pa-status">{{ \App\Enums\PaymentStatus::label($status) }}</span>
 
-                    <span class="pa-detail">
-                        @if ($customer->payment_date === null)
-                            Sin fecha de pago registrada.
-                        @else
-                            Vence {{ $customer->payment_date->format('d-m-Y') }}
-                            @if ($days > 0)
-                                ({{ $days }} {{ $days === 1 ? 'día' : 'días' }} de atraso)
-                            @elseif ($days === 0)
-                                (vence hoy)
-                            @else
-                                (vence en {{ abs($days) }} {{ abs($days) === 1 ? 'día' : 'días' }})
-                            @endif
+                        <div class="pa-facts">
+                            <div class="pa-facts__row">
+                                <span class="pa-facts__label">RUT</span>
+                                {{ $customer->formatted_rut }}
+                            </div>
+
+                            <div class="pa-facts__row">
+                                <span class="pa-facts__label">Vencimiento</span>
+                                @if ($customer->payment_date === null)
+                                    Sin fecha de pago registrada.
+                                @else
+                                    Vence {{ $customer->payment_date->format('d-m-Y') }}
+                                    @if ($days > 0)
+                                        ({{ $days }} {{ $days === 1 ? 'día' : 'días' }} de atraso)
+                                    @elseif ($days === 0)
+                                        (vence hoy)
+                                    @else
+                                        (vence en {{ abs($days) }} {{ abs($days) === 1 ? 'día' : 'días' }})
+                                    @endif
+                                @endif
+                            </div>
+
+                            <div class="pa-facts__row">Plan: {{ $customer->plan_type }}</div>
+                        </div>
+
+                        @if ($status === \App\Enums\PaymentStatus::OVERDUE && $customer->is_active)
+                            <div class="pa-notice">
+                                @if ($customer->is_suspendable)
+                                    Su servicio ya puede suspenderse por falta de pago.
+                                @else
+                                    Tiene {{ $customer->days_until_suspendable }}
+                                    {{ $customer->days_until_suspendable === 1 ? 'día' : 'días' }}
+                                    para regularizar el pago antes de la suspensión del servicio.
+                                @endif
+                            </div>
                         @endif
-                        <span class="pa-sep">&middot;</span>
-                        Plan: {{ $customer->plan_type }}
-                    </span>
-                </div>
 
-                <div class="pa-action">
-                    @if ($customer->charge_amount !== null)
-                        <span class="pa-amount">${{ number_format($customer->charge_amount, 0, ',', '.') }}</span>
-                    @endif
+                        @if (!$customer->is_active)
+                            <div class="pa-notice">
+                                Servicio suspendido. Al pagar, su servicio se reactivará automáticamente.
+                            </div>
+                        @endif
+                    </div>
+                </details>
 
-                    @if ($this->can_pay)
+                @if ($this->can_pay)
+                    <div class="pa-action">
                         <button type="button" class="pa-pay" wire:click="payWithWebpay" wire:loading.attr="disabled">
                             <span wire:loading.remove wire:target="payWithWebpay">Pagar con Webpay</span>
                             <span wire:loading wire:target="payWithWebpay">Redirigiendo…</span>
                         </button>
-                    @endif
-                </div>
+                    </div>
+                @endif
             @endif
         </div>
-
-        @if ($customer !== null && $status === \App\Enums\PaymentStatus::OVERDUE && $customer->is_active)
-            <div class="pa-notice">
-                <div class="pa-strip">
-                    @if ($customer->is_suspendable)
-                        Su servicio ya puede suspenderse por falta de pago.
-                    @else
-                        Tiene {{ $customer->days_until_suspendable }}
-                        {{ $customer->days_until_suspendable === 1 ? 'día' : 'días' }}
-                        para regularizar el pago antes de la suspensión del servicio.
-                    @endif
-                </div>
-            </div>
-        @endif
-
-        @if ($customer !== null && !$customer->is_active)
-            <div class="pa-notice">
-                <div class="pa-strip">
-                    Servicio suspendido. Al pagar, su servicio se reactivará automáticamente.
-                </div>
-            </div>
-        @endif
     </header>
 
     @if ($paymentResult === 'success')
