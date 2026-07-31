@@ -1128,6 +1128,7 @@ Aparte, dos preguntas para el negocio, no para el DBA:
 
 ---
 
+<!-- 
 ## Documentos relacionados
 
 - `CLAUDE.md` — arquitectura y convenciones del módulo. **Autoritativo** (`AGENTS.md` está obsoleto).
@@ -1135,3 +1136,4 @@ Aparte, dos preguntas para el negocio, no para el DBA:
 - `docs/bank-credentials.md` — cómo conseguir credenciales reales de Transbank.
 - `docs/laravel-for-fastapi-devs.md` — Laravel/Livewire explicado desde FastAPI/Spring Boot.
 - `docs/integration-plan.md` — **superado por este documento.**
+-->
